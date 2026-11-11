@@ -29,7 +29,7 @@ app.post("/login", (req, res) => {
       {
         id: user.id,
         username: user.username,
-        isadmin: user.isadmin,
+        isAdmin: user.isAdmin,
       },
       secret_key,
       { expiresIn: "1h" }
@@ -47,33 +47,65 @@ app.post("/login", (req, res) => {
 //middleware é uma função que tem acesso ao objeto de requisição(req), ao objeto de resposta(res) 
 //é a proxima função de middleware no ciclo de requisição-resposta da aplicação. A próxima função de middleware é comumente denotada por uma variável chamada next.
 
-const authenticaedToken = (req, res, next) => {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
 
-  if(!token){
+const authenticatedToken = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader) {
     return res.status(401).json({
       mensagem: "Token não fornecido",
     });
   }
-  jwt.verify(token, secret_key, (err, user) => {
-    if (err) {
-        return res.status(403).json({
-          mensagem: "Token inválido",
-        });
-      }
-      req.user = user;
-      next();
+
+  const token = authHeader.split(" ")[1];
+
+  if (!token) {
+    return res.status(401).json({
+      mensagem: "Formato do token inválido",
     });
   }
 
-app.get("/protected", authenticaedToken, (req, res) => {
+  jwt.verify(token, secret_key, (err, user) => {
+    if (err) {
+      return res.status(403).json({
+        mensagem: "Token inválido ou expirado",
+      });
+    }
+
+    req.user = user;
+
+    console.log(`Usuário autenticado: ${JSON.stringify(user)}`);
+
+    next();
+  });
+};
+
+    
+
+
+
+app.get("/protected", authenticatedToken, (req, res) => {
   res.json({
     mensagem: "Acesso permitido",
     user: req.user,
   });
 });
 
+
+
+app.get("/admin", authenticatedToken, (req, res) => {
+  if (req.user.isAdmin) {
+    res.json({
+      mensagem: "Acesso permitido para administradores",
+      user: req.user,
+    });
+  } else {
+    res.status(403).json({
+      mensagem: "Acesso negado. Você não é um administrador.",
+      user: req.user,
+    });
+  }
+});
 
 app.use("/", (req, res) => {
   res.status(404).send("Rota não encontrada");
